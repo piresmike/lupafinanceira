@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import DashboardHome from "./pages/dashboard/DashboardHome";
 import Noticias from "./pages/dashboard/Noticias";
 import Cursos from "./pages/dashboard/Cursos";
+import CursoDetalhe from "./pages/dashboard/CursoDetalhe";
 import Relatorios from "./pages/dashboard/Relatorios";
 import Historico from "./pages/dashboard/Historico";
 import Cotacoes from "./pages/dashboard/Cotacoes";
@@ -34,6 +35,7 @@ const App = () => (
             <Route index element={<DashboardHome />} />
             <Route path="noticias" element={<Noticias />} />
             <Route path="cursos" element={<Cursos />} />
+            <Route path="cursos/:slug" element={<CursoDetalhe />} />
             <Route path="relatorios" element={<Relatorios />} />
             <Route path="historico" element={<Historico />} />
             <Route path="cotacoes" element={<Cotacoes />} />
