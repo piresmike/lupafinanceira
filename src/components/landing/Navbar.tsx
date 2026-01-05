@@ -1,11 +1,39 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, TrendingUp } from "lucide-react";
+import { Menu, X, TrendingUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
+      setIsLoading(false);
+    };
+
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleEntrarClick = () => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    } else {
+      navigate('/login');
+    }
+  };
 
   const navLinks = [
     { href: "#features", label: "Funcionalidades" },
@@ -42,8 +70,14 @@ export function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden lg:flex items-center gap-4">
-            <Button variant="ghost" asChild>
-              <Link to="/login">Entrar</Link>
+            <Button variant="ghost" onClick={handleEntrarClick} disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isAuthenticated ? (
+                "Dashboard"
+              ) : (
+                "Entrar"
+              )}
             </Button>
             <Button variant="hero" asChild>
               <Link to="/assinatura">Começar Agora</Link>
@@ -81,11 +115,20 @@ export function Navbar() {
                   </a>
                 ))}
                 <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                  <Button variant="outline" asChild className="w-full">
-                    <Link to="/login">Entrar</Link>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => {
+                      handleEntrarClick();
+                      setIsOpen(false);
+                    }}
+                  >
+                    {isAuthenticated ? "Dashboard" : "Entrar"}
                   </Button>
                   <Button variant="hero" asChild className="w-full">
-                    <Link to="/assinatura">Começar Agora</Link>
+                    <Link to="/assinatura" onClick={() => setIsOpen(false)}>
+                      Começar Agora
+                    </Link>
                   </Button>
                 </div>
               </div>

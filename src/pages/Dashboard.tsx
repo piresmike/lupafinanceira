@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { motion } from "framer-motion";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   TrendingUp,
   Newspaper,
@@ -14,8 +13,19 @@ import {
   Menu,
   X,
   LayoutDashboard,
+  ChevronDown,
+  Settings,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -30,12 +40,44 @@ const navItems = [
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
 
   const isActive = (path: string) => {
     if (path === "/dashboard") {
       return location.pathname === "/dashboard";
     }
     return location.pathname.startsWith(path);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    toast({
+      title: "Até logo!",
+      description: "Você foi desconectado com sucesso.",
+    });
+    navigate('/');
+  };
+
+  const getUserInitial = () => {
+    if (user?.user_metadata?.full_name) {
+      return user.user_metadata.full_name.charAt(0).toUpperCase();
+    }
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return 'U';
+  };
+
+  const getUserName = () => {
+    if (user?.user_metadata?.full_name) {
+      return user.user_metadata.full_name;
+    }
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+    return 'Usuário';
   };
 
   return (
@@ -95,13 +137,13 @@ export default function Dashboard() {
               <User className="w-5 h-5" />
               <span className="font-medium">Meu Perfil</span>
             </Link>
-            <Link
-              to="/"
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
             >
               <LogOut className="w-5 h-5" />
               <span className="font-medium">Sair</span>
-            </Link>
+            </button>
           </div>
         </div>
       </aside>
@@ -124,17 +166,47 @@ export default function Dashboard() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-3 outline-none">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-foreground">Investidor Pro</p>
-                <p className="text-xs text-muted-foreground">Plano ativo</p>
+                <p className="text-sm font-medium text-foreground">{getUserName()}</p>
+                <p className="text-xs text-muted-foreground">Plano Básico</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-primary-foreground font-semibold">
-                U
+                {getUserInitial()}
               </div>
-            </div>
-          </div>
+              <ChevronDown className="w-4 h-4 text-muted-foreground hidden sm:block" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div>
+                  <p className="font-medium">{getUserName()}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/dashboard/perfil" className="cursor-pointer">
+                  <User className="w-4 h-4 mr-2" />
+                  Meu Perfil
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/dashboard/configuracoes" className="cursor-pointer">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurações
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={handleLogout}
+                className="text-destructive focus:text-destructive cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         {/* Page content */}
