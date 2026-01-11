@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      news_cache: {
+        Row: {
+          cache_key: string
+          cached_at: string | null
+          category: string | null
+          created_at: string | null
+          data: Json
+          expires_at: string
+          id: string
+          language: string | null
+          page: number | null
+          total_results: number | null
+        }
+        Insert: {
+          cache_key: string
+          cached_at?: string | null
+          category?: string | null
+          created_at?: string | null
+          data: Json
+          expires_at: string
+          id?: string
+          language?: string | null
+          page?: number | null
+          total_results?: number | null
+        }
+        Update: {
+          cache_key?: string
+          cached_at?: string | null
+          category?: string | null
+          created_at?: string | null
+          data?: Json
+          expires_at?: string
+          id?: string
+          language?: string | null
+          page?: number | null
+          total_results?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -106,7 +145,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      clean_expired_news_cache: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
