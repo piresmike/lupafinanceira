@@ -1,87 +1,128 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Search, ExternalLink, Clock, Tag } from "lucide-react";
+import { Search, ExternalLink, Clock, RefreshCw, AlertCircle, Newspaper } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { formatNewsDate } from "@/hooks/useNews";
 
-const categories = [
-  "Todas",
-  "Brasil",
-  "Mundo",
-  "Ações",
-  "Renda Fixa",
-  "Criptomoedas",
-  "Commodities",
-  "Economia",
+const CATEGORIES = [
+  { id: "general", label: "Todas", icon: "📰" },
+  { id: "business", label: "Negócios", icon: "💼" },
+  { id: "technology", label: "Tecnologia", icon: "💻" },
+  { id: "science", label: "Ciência", icon: "🔬" },
+  { id: "health", label: "Saúde", icon: "🏥" },
+  { id: "sports", label: "Esportes", icon: "⚽" },
+  { id: "entertainment", label: "Entretenimento", icon: "🎬" },
 ];
 
-const newsData = [
-  {
-    id: 1,
-    title: "Ibovespa fecha em alta com expectativa de corte de juros nos EUA",
-    summary: "O principal índice da bolsa brasileira avançou 1,24% nesta sexta-feira, impulsionado por dados econômicos positivos.",
-    source: "InfoMoney",
-    time: "2 horas atrás",
-    category: "Ações",
-    image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=250&fit=crop",
-  },
-  {
-    id: 2,
-    title: "Dólar recua e fecha abaixo de R$ 5,00 pela primeira vez em 3 meses",
-    summary: "A moeda americana perdeu força após dados de inflação nos EUA virem abaixo das expectativas do mercado.",
-    source: "Valor Econômico",
-    time: "3 horas atrás",
-    category: "Economia",
-    image: "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=400&h=250&fit=crop",
-  },
-  {
-    id: 3,
-    title: "Bitcoin supera US$ 43 mil e renova máxima de 2024",
-    summary: "A maior criptomoeda do mundo acumula alta de 150% no ano, impulsionada pela aprovação de ETFs nos EUA.",
-    source: "CoinDesk",
-    time: "4 horas atrás",
-    category: "Criptomoedas",
-    image: "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400&h=250&fit=crop",
-  },
-  {
-    id: 4,
-    title: "Petrobras anuncia dividendos recordes para acionistas",
-    summary: "Estatal distribuirá R$ 72 bilhões em dividendos referentes ao terceiro trimestre de 2024.",
-    source: "Reuters",
-    time: "5 horas atrás",
-    category: "Ações",
-    image: "https://images.unsplash.com/photo-1516937941344-00b4e0337589?w=400&h=250&fit=crop",
-  },
-  {
-    id: 5,
-    title: "Copom mantém Selic em 11,75% e sinaliza novos cortes em 2025",
-    summary: "Banco Central indica continuidade do ciclo de afrouxamento monetário nos próximos meses.",
-    source: "Banco Central",
-    time: "6 horas atrás",
-    category: "Economia",
-    image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=250&fit=crop",
-  },
-  {
-    id: 6,
-    title: "Fundos imobiliários: FIIs de papel lideram rendimentos em 2024",
-    summary: "Fundos de recebíveis imobiliários apresentam os melhores retornos do ano, superando a média do IFIX.",
-    source: "FIIs.com.br",
-    time: "7 horas atrás",
-    category: "Renda Fixa",
-    image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=250&fit=crop",
-  },
-];
+const PAGE_SIZE = 20;
+
+interface Article {
+  source: { id: string | null; name: string };
+  author: string | null;
+  title: string;
+  description: string | null;
+  url: string;
+  urlToImage: string | null;
+  publishedAt: string;
+  content: string | null;
+}
 
 export default function Noticias() {
-  const [selectedCategory, setSelectedCategory] = useState("Todas");
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("general");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [fromCache, setFromCache] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState("");
 
-  const filteredNews = newsData.filter((news) => {
-    const matchesCategory = selectedCategory === "Todas" || news.category === selectedCategory;
-    const matchesSearch = news.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      news.summary.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const fetchNews = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams({
+        category: selectedCategory,
+        language: "pt",
+        page: String(currentPage),
+        pageSize: String(PAGE_SIZE),
+      });
+
+      if (searchQuery.trim() !== "") {
+        params.set("q", searchQuery);
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-news?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || result.error || "Erro ao carregar notícias");
+      }
+
+      setArticles(result.articles);
+      setTotalResults(result.totalResults);
+      setFromCache(result.fromCache);
+
+      if (result.isFallback && result.message) {
+        setCacheMessage(result.message);
+      } else {
+        setCacheMessage("");
+      }
+    } catch (err: any) {
+      console.error("Erro:", err);
+      setError(err.message);
+      setArticles([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCategory, currentPage, searchQuery]);
+
+  useEffect(() => {
+    fetchNews();
+  }, [fetchNews]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchQuery(searchInput);
+    setCurrentPage(1);
+  };
+
+  const handleCategoryChange = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setCurrentPage(1);
+    setSearchQuery("");
+    setSearchInput("");
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchInput("");
+    setCurrentPage(1);
+  };
+
+  const totalPages = Math.ceil(totalResults / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -89,14 +130,39 @@ export default function Noticias() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <h1 className="font-heading font-bold text-2xl text-foreground mb-2">
-          Notícias do Mercado
-        </h1>
-        <p className="text-muted-foreground">
-          Acompanhe as principais notícias do mercado financeiro em tempo real.
-        </p>
+        <div>
+          <h1 className="font-heading font-bold text-2xl text-foreground mb-2">
+            📰 Notícias do Mercado Financeiro
+          </h1>
+          <p className="text-muted-foreground">
+            Fique por dentro das últimas notícias de finanças e economia do Brasil
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchNews}
+          disabled={loading}
+          className="gap-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Atualizar
+        </Button>
       </motion.div>
+
+      {/* Cache Message */}
+      {cacheMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
+        >
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <p className="text-sm text-amber-800 dark:text-amber-200">{cacheMessage}</p>
+        </motion.div>
+      )}
 
       {/* Filters */}
       <motion.div
@@ -106,94 +172,249 @@ export default function Noticias() {
         className="space-y-4"
       >
         {/* Search */}
-        <div className="relative max-w-md">
+        <form onSubmit={handleSearch} className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar notícias..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10 pr-24"
           />
-        </div>
+          <Button
+            type="submit"
+            size="sm"
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+            disabled={loading}
+          >
+            Buscar
+          </Button>
+        </form>
+
+        {searchQuery && (
+          <button
+            onClick={clearSearch}
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            ✕ Limpar busca: "{searchQuery}"
+          </button>
+        )}
 
         {/* Categories */}
         <div className="flex flex-wrap gap-2">
-          {categories.map((category) => (
+          {CATEGORIES.map((cat) => (
             <Button
-              key={category}
-              variant={selectedCategory === category ? "default" : "outline"}
+              key={cat.id}
+              variant={selectedCategory === cat.id ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => handleCategoryChange(cat.id)}
+              disabled={loading}
+              className="gap-1"
             >
-              {category}
+              <span>{cat.icon}</span>
+              {cat.label}
             </Button>
           ))}
         </div>
       </motion.div>
 
-      {/* News Grid */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
-      >
-        {filteredNews.map((news, index) => (
-          <motion.article
-            key={news.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 * index }}
-            className="group rounded-2xl bg-card border border-border overflow-hidden hover:shadow-large transition-all duration-300"
-          >
-            <div className="relative h-48 overflow-hidden">
-              <img
-                src={news.image}
-                alt={news.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute top-3 left-3">
-                <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                  {news.category}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-5">
-              <h2 className="font-heading font-semibold text-lg text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
-                {news.title}
-              </h2>
-              <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                {news.summary}
-              </p>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium">{news.source}</span>
-                  <span>•</span>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {news.time}
-                  </div>
-                </div>
-
-                <Button variant="ghost" size="sm" className="gap-1">
-                  Ler
-                  <ExternalLink className="w-3 h-3" />
-                </Button>
-              </div>
-            </div>
-          </motion.article>
-        ))}
-      </motion.div>
-
-      {filteredNews.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">
-            Nenhuma notícia encontrada para os filtros selecionados.
-          </p>
+      {/* Cache Badge */}
+      {fromCache && !cacheMessage && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          Carregado do cache (atualizado recentemente)
         </div>
       )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-2xl bg-card border border-border overflow-hidden">
+              <Skeleton className="h-48 w-full" />
+              <div className="p-5 space-y-3">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-col items-center justify-center py-12 text-center"
+        >
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+            <AlertCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <h3 className="font-semibold text-lg mb-2">Erro ao Carregar Notícias</h3>
+          <p className="text-muted-foreground mb-4 max-w-md">{error}</p>
+          <Button onClick={fetchNews} variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Tentar Novamente
+          </Button>
+        </motion.div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && articles.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-col items-center justify-center py-12 text-center"
+        >
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Newspaper className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h3 className="font-semibold text-lg mb-2">Nenhuma notícia encontrada</h3>
+          <p className="text-muted-foreground">
+            {searchQuery
+              ? `Não encontramos resultados para "${searchQuery}"`
+              : "Tente selecionar outra categoria"}
+          </p>
+        </motion.div>
+      )}
+
+      {/* News Grid */}
+      {!loading && !error && articles.length > 0 && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {articles.map((article, index) => (
+              <NewsCard key={`${article.url}-${index}`} article={article} index={index} />
+            ))}
+          </motion.div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center gap-4 mt-8">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+
+                  {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+
+                    if (pageNum < 1 || pageNum > totalPages) return null;
+
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(pageNum)}
+                          isActive={currentPage === pageNum}
+                          className="cursor-pointer"
+                        >
+                          {pageNum}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                      className={
+                        currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+
+              <p className="text-sm text-muted-foreground">
+                Mostrando {(currentPage - 1) * PAGE_SIZE + 1} -{" "}
+                {Math.min(currentPage * PAGE_SIZE, totalResults)} de{" "}
+                {totalResults.toLocaleString("pt-BR")} resultados
+              </p>
+            </div>
+          )}
+        </>
+      )}
     </div>
+  );
+}
+
+// ============================================
+// COMPONENTE: CARD DE NOTÍCIA
+// ============================================
+function NewsCard({ article, index }: { article: Article; index: number }) {
+  const [imageError, setImageError] = useState(false);
+
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 * index }}
+      className="group rounded-2xl bg-card border border-border overflow-hidden hover:shadow-large transition-all duration-300"
+    >
+      <div className="relative h-48 overflow-hidden bg-muted">
+        {article.urlToImage && !imageError ? (
+          <img
+            src={article.urlToImage}
+            alt={article.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={() => setImageError(true)}
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Newspaper className="w-12 h-12 text-muted-foreground/50" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute bottom-3 left-3">
+          <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+            {article.source?.name || "Fonte"}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+          <Clock className="w-3 h-3" />
+          {formatNewsDate(article.publishedAt)}
+        </div>
+
+        <h2 className="font-heading font-semibold text-lg text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+          {article.title}
+        </h2>
+
+        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+          {article.description || article.content?.substring(0, 150) || "Sem descrição disponível."}
+        </p>
+
+        <a
+          href={article.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-semibold text-sm transition-all group-hover:gap-3"
+        >
+          Ler notícia completa
+          <ExternalLink className="w-4 h-4" />
+        </a>
+      </div>
+    </motion.article>
   );
 }
