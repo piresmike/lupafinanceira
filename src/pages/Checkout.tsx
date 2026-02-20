@@ -142,8 +142,8 @@ export default function Checkout() {
     setFormData({ ...formData, [name]: formattedValue });
   };
 
-  const processCardPayment = async () => {
-    if (!mp || !user) {
+  const processCardPayment = async (userId: string) => {
+    if (!mp) {
       toast({ title: "Erro", description: "Sistema não inicializado", variant: "destructive" });
       return;
     }
@@ -181,7 +181,7 @@ export default function Checkout() {
           paymentMethodId,
           issuerId,
         },
-        userId: user.id,
+        userId,
       },
     });
 
@@ -199,11 +199,7 @@ export default function Checkout() {
     }
   };
 
-  const processPixPayment = async () => {
-    if (!user) {
-      toast({ title: "Erro", description: "Usuário não autenticado", variant: "destructive" });
-      return;
-    }
+  const processPixPayment = async (userId: string) => {
 
     const { data, error: fnError } = await supabase.functions.invoke("process-payment", {
       body: {
@@ -212,7 +208,7 @@ export default function Checkout() {
           email: formData.email,
           cpf: formData.cpf,
         },
-        userId: user.id,
+        userId,
       },
     });
 
@@ -246,23 +242,70 @@ export default function Checkout() {
       return;
     }
 
-    if (!user) {
-      toast({ title: "Login necessário", description: "Faça login para continuar.", variant: "destructive" });
-      navigate("/login");
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      if (paymentMethod === "card") {
-        await processCardPayment();
-      } else {
-        await processPixPayment();
+      let currentUser = user;
+
+      // Auto-create account if user is not logged in
+      if (!currentUser) {
+        const randomPassword = crypto.randomUUID();
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: randomPassword,
+          options: {
+            data: {
+              full_name: formData.nome,
+            },
+          },
+        });
+
+        if (signUpError) {
+          // If user already exists, try to send password reset
+          if (signUpError.message?.includes('already registered') || signUpError.message?.includes('already been registered')) {
+            toast({
+              title: "Email já cadastrado",
+              description: "Faça login para continuar com o pagamento.",
+              variant: "destructive",
+            });
+            navigate("/login");
+            setIsLoading(false);
+            return;
+          }
+          throw new Error(signUpError.message);
+        }
+
+        if (signUpData.user) {
+          currentUser = signUpData.user;
+
+          // Update profile with CPF and phone
+          await supabase
+            .from("profiles")
+            .update({
+              cpf: formData.cpf.replace(/\D/g, ""),
+              phone: formData.telefone.replace(/\D/g, ""),
+            })
+            .eq("id", signUpData.user.id);
+
+          // Send password reset email so user can set their own password
+          await supabase.auth.resetPasswordForEmail(formData.email, {
+            redirectTo: `${window.location.origin}/redefinir-senha`,
+          });
+        }
       }
-    } catch (err) {
+
+      if (!currentUser) {
+        throw new Error("Não foi possível criar a conta.");
+      }
+
+      if (paymentMethod === "card") {
+        await processCardPayment(currentUser.id);
+      } else {
+        await processPixPayment(currentUser.id);
+      }
+    } catch (err: any) {
       console.error("Payment error:", err);
-      setError("Erro inesperado. Tente novamente.");
+      setError(err.message || "Erro inesperado. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
