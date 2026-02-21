@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { jsPDF } from "jspdf";
 import {
   Select,
   SelectContent,
@@ -57,10 +59,73 @@ const tipoDescriptions: Record<TipoRelatorio, string> = {
   aprofundado: "15+ páginas, análise profunda",
 };
 
-interface GeneratedReport {
-  keyword: string;
-  periodo: string;
-  tipo: string;
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`(.*?)`/g, "$1")
+    .replace(/^[-*]\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function generatePDF(content: string, keywords: string[]) {
+  const doc = new jsPDF();
+  const plain = stripMarkdown(content);
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const maxWidth = pageWidth - margin * 2;
+
+  // Title
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Relatório Financeiro", margin, 25);
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100);
+  doc.text(`Tema: ${keywords.join(", ")}`, margin, 33);
+  doc.text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, margin, 39);
+
+  doc.setDrawColor(200);
+  doc.line(margin, 43, pageWidth - margin, 43);
+
+  // Body
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  const lines = doc.splitTextToSize(plain, maxWidth);
+  let y = 52;
+
+  for (const line of lines) {
+    if (y > 280) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(line, margin, y);
+    y += 6;
+  }
+
+  doc.save(`relatorio-${keywords[0]?.replace(/\s+/g, "-").toLowerCase() || "financeiro"}.pdf`);
+}
+
+function downloadAudio(content: string, keywords: string[]) {
+  const plain = stripMarkdown(content);
+  const utterance = new SpeechSynthesisUtterance(plain);
+  utterance.lang = "pt-BR";
+  utterance.rate = 0.95;
+
+  // Try to find a Portuguese voice
+  const voices = window.speechSynthesis.getVoices();
+  const ptVoice = voices.find((v) => v.lang.startsWith("pt"));
+  if (ptVoice) utterance.voice = ptVoice;
+
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+
+  toast({
+    title: "Reproduzindo áudio",
+    description: "O relatório está sendo narrado. Use os controles do navegador para pausar.",
+  });
 }
 
 export default function Relatorios() {
@@ -69,7 +134,7 @@ export default function Relatorios() {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [tipoRelatorio, setTipoRelatorio] = useState<TipoRelatorio>("completo");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
+  const [reportContent, setReportContent] = useState<string | null>(null);
 
   const addKeyword = (word: string) => {
     const trimmed = word.trim();
@@ -90,7 +155,7 @@ export default function Relatorios() {
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (keywords.length === 0) {
       toast({
         title: "Adicione palavras-chave",
@@ -101,18 +166,31 @@ export default function Relatorios() {
     }
 
     setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      setGeneratedReport({
-        keyword: keywords.join(", "),
-        periodo: periodoLabels[periodo],
-        tipo: tipoLabels[tipoRelatorio],
+    setReportContent(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-report", {
+        body: { keywords, periodo, tipo: tipoRelatorio },
       });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setReportContent(data.content);
       toast({
         title: "Relatório gerado!",
         description: "Seus arquivos estão prontos para download.",
       });
-    }, 2500);
+    } catch (err: any) {
+      console.error("Report generation error:", err);
+      toast({
+        title: "Erro ao gerar relatório",
+        description: err.message || "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -147,11 +225,7 @@ export default function Relatorios() {
             onKeyDown={handleKeyDown}
             className="flex-1"
           />
-          <Button
-            variant="outline"
-            onClick={() => addKeyword(keyword)}
-            disabled={!keyword.trim()}
-          >
+          <Button variant="outline" onClick={() => addKeyword(keyword)} disabled={!keyword.trim()}>
             Adicionar
           </Button>
         </div>
@@ -159,16 +233,15 @@ export default function Relatorios() {
         {keywords.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
             {keywords.map((kw) => (
-              <Badge
+              <span
                 key={kw}
-                variant="secondary"
-                className="px-3 py-1.5 text-sm flex items-center gap-1.5"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-full bg-secondary text-foreground"
               >
                 {kw}
                 <button onClick={() => removeKeyword(kw)} className="hover:text-destructive">
                   <X className="w-3 h-3" />
                 </button>
-              </Badge>
+              </span>
             ))}
           </div>
         )}
@@ -176,7 +249,6 @@ export default function Relatorios() {
 
       {/* Theme Suggestions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Temas em Alta */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -204,7 +276,6 @@ export default function Relatorios() {
           </div>
         </motion.div>
 
-        {/* Temas B3 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -240,9 +311,7 @@ export default function Relatorios() {
         transition={{ delay: 0.25 }}
         className="p-6 rounded-2xl bg-card border border-border"
       >
-        <h2 className="font-heading font-semibold text-lg text-foreground mb-4">
-          Filtros
-        </h2>
+        <h2 className="font-heading font-semibold text-lg text-foreground mb-4">Filtros</h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -311,30 +380,43 @@ export default function Relatorios() {
       </motion.div>
 
       {/* Generated Report */}
-      {generatedReport && (
+      {reportContent && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="p-6 rounded-2xl bg-card border border-primary/20"
+          className="p-6 rounded-2xl bg-card border border-primary/20 space-y-4"
         >
-          <h2 className="font-heading font-semibold text-lg text-foreground mb-2">
+          <h2 className="font-heading font-semibold text-lg text-foreground">
             Relatório Gerado
           </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            <strong>Tema:</strong> {generatedReport.keyword} · <strong>Período:</strong>{" "}
-            {generatedReport.periodo} · <strong>Tipo:</strong> {generatedReport.tipo}
+          <p className="text-sm text-muted-foreground">
+            <strong>Tema:</strong> {keywords.join(", ")} · <strong>Período:</strong>{" "}
+            {periodoLabels[periodo]} · <strong>Tipo:</strong> {tipoLabels[tipoRelatorio]}
           </p>
 
+          {/* Preview */}
+          <div className="max-h-64 overflow-y-auto p-4 rounded-xl bg-secondary/50 text-sm text-foreground whitespace-pre-wrap">
+            {stripMarkdown(reportContent).slice(0, 1000)}
+            {reportContent.length > 1000 && "..."}
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="outline" className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => generatePDF(reportContent, keywords)}
+            >
               <FileText className="w-4 h-4 text-primary" />
               <Download className="w-4 h-4" />
               Baixar PDF
             </Button>
-            <Button variant="outline" className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => downloadAudio(reportContent, keywords)}
+            >
               <Mic className="w-4 h-4 text-accent" />
-              <Download className="w-4 h-4" />
-              Baixar Áudio
+              Ouvir Áudio
             </Button>
           </div>
         </motion.div>
