@@ -1,413 +1,340 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { FileText, Mic, Mail, MessageCircle, Send, Check, Loader2 } from "lucide-react";
+import { FileText, Mic, Download, Search, TrendingUp, Flame, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const themes = {
-  classicos: [
-    "Inflação e Taxa Selic",
-    "Bolsa de Valores (Ibovespa)",
-    "Dólar e Câmbio",
-    "Fundos Imobiliários",
-    "Renda Fixa",
-    "Previdência Privada",
-    "Tesouro Direto",
-  ],
-  emAlta: [
-    "Criptomoedas e Blockchain",
-    "ESG e Investimentos Sustentáveis",
-    "Startups e Venture Capital",
-    "Inteligência Artificial no Mercado Financeiro",
-    "DeFi (Finanças Descentralizadas)",
-    "Tokenização de Ativos",
-    "Open Banking",
-  ],
+const temasEmAlta = [
+  "Criptomoedas e Blockchain",
+  "ESG e Investimentos Sustentáveis",
+  "Inteligência Artificial no Mercado Financeiro",
+  "DeFi (Finanças Descentralizadas)",
+  "Tokenização de Ativos",
+  "Open Banking",
+];
+
+const temasB3 = [
+  "Ibovespa",
+  "Small Caps",
+  "Dividendos",
+  "BDRs",
+  "ETFs",
+  "IPOs e Follow-ons",
+  "Fundos Imobiliários (FIIs)",
+  "Commodities",
+  "Ações de Tecnologia",
+  "Mercado de Opções",
+];
+
+type Periodo = "semana" | "mes" | "trimestre" | "ano";
+type TipoRelatorio = "simples" | "completo" | "aprofundado";
+
+const periodoLabels: Record<Periodo, string> = {
+  semana: "Última Semana",
+  mes: "Último Mês",
+  trimestre: "Último Trimestre",
+  ano: "Último Ano",
 };
 
-export default function Relatorios() {
-  const [step, setStep] = useState(1);
-  const [selectedTheme, setSelectedTheme] = useState("");
-  const [reportType, setReportType] = useState("resumido");
-  const [formats, setFormats] = useState<string[]>(["pdf"]);
-  const [channels, setChannels] = useState<string[]>(["email"]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isGenerated, setIsGenerated] = useState(false);
+const tipoLabels: Record<TipoRelatorio, string> = {
+  simples: "Simples",
+  completo: "Completo",
+  aprofundado: "Aprofundado",
+};
 
-  const handleFormatToggle = (format: string) => {
-    setFormats((prev) =>
-      prev.includes(format)
-        ? prev.filter((f) => f !== format)
-        : [...prev, format]
-    );
+const tipoDescriptions: Record<TipoRelatorio, string> = {
+  simples: "2-3 páginas, leitura rápida",
+  completo: "8-10 páginas com gráficos",
+  aprofundado: "15+ páginas, análise profunda",
+};
+
+interface GeneratedReport {
+  keyword: string;
+  periodo: string;
+  tipo: string;
+}
+
+export default function Relatorios() {
+  const [keyword, setKeyword] = useState("");
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [periodo, setPeriodo] = useState<Periodo>("mes");
+  const [tipoRelatorio, setTipoRelatorio] = useState<TipoRelatorio>("completo");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
+
+  const addKeyword = (word: string) => {
+    const trimmed = word.trim();
+    if (trimmed && !keywords.includes(trimmed)) {
+      setKeywords((prev) => [...prev, trimmed]);
+    }
+    setKeyword("");
   };
 
-  const handleChannelToggle = (channel: string) => {
-    setChannels((prev) =>
-      prev.includes(channel)
-        ? prev.filter((c) => c !== channel)
-        : [...prev, channel]
-    );
+  const removeKeyword = (word: string) => {
+    setKeywords((prev) => prev.filter((k) => k !== word));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && keyword.trim()) {
+      e.preventDefault();
+      addKeyword(keyword);
+    }
   };
 
   const handleGenerate = () => {
-    if (!selectedTheme) {
+    if (keywords.length === 0) {
       toast({
-        title: "Selecione um tema",
-        description: "Por favor, escolha um tema para seu relatório.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (formats.length === 0) {
-      toast({
-        title: "Selecione um formato",
-        description: "Por favor, escolha pelo menos um formato.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (channels.length === 0) {
-      toast({
-        title: "Selecione um canal",
-        description: "Por favor, escolha pelo menos um canal de entrega.",
+        title: "Adicione palavras-chave",
+        description: "Digite ou selecione pelo menos uma palavra-chave.",
         variant: "destructive",
       });
       return;
     }
 
     setIsGenerating(true);
-
     setTimeout(() => {
       setIsGenerating(false);
-      setIsGenerated(true);
-      toast({
-        title: "Relatório gerado com sucesso!",
-        description: "Seu relatório será enviado em até 5 minutos.",
+      setGeneratedReport({
+        keyword: keywords.join(", "),
+        periodo: periodoLabels[periodo],
+        tipo: tipoLabels[tipoRelatorio],
       });
-    }, 2000);
+      toast({
+        title: "Relatório gerado!",
+        description: "Seus arquivos estão prontos para download.",
+      });
+    }, 2500);
   };
-
-  const resetForm = () => {
-    setSelectedTheme("");
-    setReportType("resumido");
-    setFormats(["pdf"]);
-    setChannels(["email"]);
-    setStep(1);
-    setIsGenerated(false);
-  };
-
-  if (isGenerated) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-md mx-auto text-center py-12"
-      >
-        <div className="w-20 h-20 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-6">
-          <Check className="w-10 h-10 text-accent" />
-        </div>
-        <h2 className="font-heading font-bold text-2xl text-foreground mb-4">
-          Relatório Solicitado!
-        </h2>
-        <p className="text-muted-foreground mb-8">
-          Seu relatório sobre <strong>{selectedTheme}</strong> está sendo gerado 
-          e será enviado em até 5 minutos pelos canais selecionados.
-        </p>
-        <Button variant="hero" onClick={resetForm}>
-          Gerar Novo Relatório
-        </Button>
-      </motion.div>
-    );
-  }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-heading font-bold text-2xl text-foreground mb-2">
           Relatórios Personalizados
         </h1>
         <p className="text-muted-foreground">
-          Escolha um tema e receba análises detalhadas diretamente no seu canal preferido.
+          Pesquise por palavras-chave ou escolha um tema sugerido para gerar relatórios em PDF e áudio.
         </p>
       </motion.div>
 
-      {/* Progress Steps */}
+      {/* Keyword Input */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex items-center gap-2"
+        className="p-6 rounded-2xl bg-card border border-border"
       >
-        {[1, 2, 3, 4].map((s) => (
-          <div key={s} className="flex items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                step >= s
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-            >
-              {s}
-            </div>
-            {s < 4 && (
-              <div
-                className={`w-12 h-1 mx-1 rounded-full transition-colors ${
-                  step > s ? "bg-primary" : "bg-secondary"
-                }`}
-              />
-            )}
+        <h2 className="font-heading font-semibold text-lg text-foreground mb-4 flex items-center gap-2">
+          <Search className="w-5 h-5 text-primary" />
+          Palavras-Chave
+        </h2>
+
+        <div className="flex gap-2 mb-3">
+          <Input
+            placeholder="Digite uma palavra-chave e pressione Enter..."
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="flex-1"
+          />
+          <Button
+            variant="outline"
+            onClick={() => addKeyword(keyword)}
+            disabled={!keyword.trim()}
+          >
+            Adicionar
+          </Button>
+        </div>
+
+        {keywords.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {keywords.map((kw) => (
+              <Badge
+                key={kw}
+                variant="secondary"
+                className="px-3 py-1.5 text-sm flex items-center gap-1.5"
+              >
+                {kw}
+                <button onClick={() => removeKeyword(kw)} className="hover:text-destructive">
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
           </div>
-        ))}
+        )}
       </motion.div>
 
-      {/* Step 1: Theme Selection */}
-      {step === 1 && (
+      {/* Theme Suggestions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Temas em Alta */}
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="p-5 rounded-2xl bg-card border border-border"
         >
-          <div className="p-6 rounded-2xl bg-card border border-border">
-            <h2 className="font-heading font-semibold text-lg text-foreground mb-4">
-              Passo 1: Escolha o Tema
-            </h2>
-
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  Temas Clássicos
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {themes.classicos.map((theme) => (
-                    <button
-                      key={theme}
-                      onClick={() => setSelectedTheme(theme)}
-                      className={`p-3 rounded-xl text-sm text-left transition-all ${
-                        selectedTheme === theme
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary hover:bg-secondary/80 text-foreground"
-                      }`}
-                    >
-                      {theme}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  Temas em Alta
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {themes.emAlta.map((theme) => (
-                    <button
-                      key={theme}
-                      onClick={() => setSelectedTheme(theme)}
-                      className={`p-3 rounded-xl text-sm text-left transition-all ${
-                        selectedTheme === theme
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary hover:bg-secondary/80 text-foreground"
-                      }`}
-                    >
-                      {theme}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <Button
-            variant="hero"
-            onClick={() => setStep(2)}
-            disabled={!selectedTheme}
-          >
-            Próximo Passo
-          </Button>
-        </motion.div>
-      )}
-
-      {/* Step 2: Report Type */}
-      {step === 2 && (
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
-        >
-          <div className="p-6 rounded-2xl bg-card border border-border">
-            <h2 className="font-heading font-semibold text-lg text-foreground mb-4">
-              Passo 2: Tipo de Relatório
-            </h2>
-
-            <RadioGroup value={reportType} onValueChange={setReportType}>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-4 rounded-xl bg-secondary/50">
-                  <RadioGroupItem value="resumido" id="resumido" />
-                  <Label htmlFor="resumido" className="cursor-pointer">
-                    <span className="font-medium text-foreground">Resumido</span>
-                    <p className="text-sm text-muted-foreground">
-                      2-3 páginas, leitura rápida e objetiva
-                    </p>
-                  </Label>
-                </div>
-                <div className="flex items-start gap-3 p-4 rounded-xl bg-secondary/50">
-                  <RadioGroupItem value="detalhado" id="detalhado" />
-                  <Label htmlFor="detalhado" className="cursor-pointer">
-                    <span className="font-medium text-foreground">Detalhado</span>
-                    <p className="text-sm text-muted-foreground">
-                      10+ páginas, análise profunda com gráficos
-                    </p>
-                  </Label>
-                </div>
-              </div>
-            </RadioGroup>
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setStep(1)}>
-              Voltar
-            </Button>
-            <Button variant="hero" onClick={() => setStep(3)}>
-              Próximo Passo
-            </Button>
+          <h3 className="font-heading font-semibold text-sm text-foreground mb-3 flex items-center gap-2">
+            <Flame className="w-4 h-4 text-accent" />
+            Temas em Alta
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {temasEmAlta.map((tema) => (
+              <button
+                key={tema}
+                onClick={() => addKeyword(tema)}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
+                  keywords.includes(tema)
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-secondary hover:bg-secondary/80 text-foreground"
+                }`}
+              >
+                {tema}
+              </button>
+            ))}
           </div>
         </motion.div>
-      )}
 
-      {/* Step 3: Format */}
-      {step === 3 && (
+        {/* Temas B3 */}
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="p-5 rounded-2xl bg-card border border-border"
         >
-          <div className="p-6 rounded-2xl bg-card border border-border">
-            <h2 className="font-heading font-semibold text-lg text-foreground mb-4">
-              Passo 3: Formato
-            </h2>
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                <Checkbox
-                  id="pdf"
-                  checked={formats.includes("pdf")}
-                  onCheckedChange={() => handleFormatToggle("pdf")}
-                />
-                <Label htmlFor="pdf" className="flex items-center gap-2 cursor-pointer">
-                  <FileText className="w-5 h-5 text-primary" />
-                  <span className="font-medium text-foreground">PDF</span>
-                </Label>
-              </div>
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                <Checkbox
-                  id="audio"
-                  checked={formats.includes("audio")}
-                  onCheckedChange={() => handleFormatToggle("audio")}
-                />
-                <Label htmlFor="audio" className="flex items-center gap-2 cursor-pointer">
-                  <Mic className="w-5 h-5 text-accent" />
-                  <span className="font-medium text-foreground">Áudio (narração profissional)</span>
-                </Label>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setStep(2)}>
-              Voltar
-            </Button>
-            <Button variant="hero" onClick={() => setStep(4)}>
-              Próximo Passo
-            </Button>
+          <h3 className="font-heading font-semibold text-sm text-foreground mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            Mais Buscados na B3
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {temasB3.map((tema) => (
+              <button
+                key={tema}
+                onClick={() => addKeyword(tema)}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
+                  keywords.includes(tema)
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary hover:bg-secondary/80 text-foreground"
+                }`}
+              >
+                {tema}
+              </button>
+            ))}
           </div>
         </motion.div>
-      )}
+      </div>
 
-      {/* Step 4: Delivery Channel */}
-      {step === 4 && (
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
+      {/* Filters */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        className="p-6 rounded-2xl bg-card border border-border"
+      >
+        <h2 className="font-heading font-semibold text-lg text-foreground mb-4">
+          Filtros
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Período</label>
+            <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(periodoLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Tipo de Relatório</label>
+            <Select value={tipoRelatorio} onValueChange={(v) => setTipoRelatorio(v as TipoRelatorio)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(tipoLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    <div>
+                      <span className="font-medium">{label}</span>
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        — {tipoDescriptions[key as TipoRelatorio]}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Generate Button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Button
+          variant="hero"
+          onClick={handleGenerate}
+          disabled={isGenerating || keywords.length === 0}
+          className="w-full sm:w-auto"
         >
-          <div className="p-6 rounded-2xl bg-card border border-border">
-            <h2 className="font-heading font-semibold text-lg text-foreground mb-4">
-              Passo 4: Canal de Entrega
-            </h2>
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Gerando Relatório...
+            </>
+          ) : (
+            <>
+              <FileText className="w-4 h-4" />
+              Gerar Relatório
+            </>
+          )}
+        </Button>
+      </motion.div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                <Checkbox
-                  id="email"
-                  checked={channels.includes("email")}
-                  onCheckedChange={() => handleChannelToggle("email")}
-                />
-                <Label htmlFor="email" className="flex items-center gap-2 cursor-pointer">
-                  <Mail className="w-5 h-5 text-primary" />
-                  <span className="font-medium text-foreground">E-mail</span>
-                </Label>
-              </div>
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                <Checkbox
-                  id="whatsapp"
-                  checked={channels.includes("whatsapp")}
-                  onCheckedChange={() => handleChannelToggle("whatsapp")}
-                />
-                <Label htmlFor="whatsapp" className="flex items-center gap-2 cursor-pointer">
-                  <MessageCircle className="w-5 h-5 text-accent" />
-                  <span className="font-medium text-foreground">WhatsApp</span>
-                </Label>
-              </div>
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                <Checkbox
-                  id="telegram"
-                  checked={channels.includes("telegram")}
-                  onCheckedChange={() => handleChannelToggle("telegram")}
-                />
-                <Label htmlFor="telegram" className="flex items-center gap-2 cursor-pointer">
-                  <Send className="w-5 h-5 text-primary" />
-                  <span className="font-medium text-foreground">Telegram</span>
-                </Label>
-              </div>
-            </div>
-          </div>
+      {/* Generated Report */}
+      {generatedReport && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="p-6 rounded-2xl bg-card border border-primary/20"
+        >
+          <h2 className="font-heading font-semibold text-lg text-foreground mb-2">
+            Relatório Gerado
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            <strong>Tema:</strong> {generatedReport.keyword} · <strong>Período:</strong>{" "}
+            {generatedReport.periodo} · <strong>Tipo:</strong> {generatedReport.tipo}
+          </p>
 
-          {/* Summary */}
-          <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-            <h3 className="font-medium text-foreground mb-2">Resumo</h3>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Tema: <strong>{selectedTheme}</strong></li>
-              <li>• Tipo: <strong>{reportType === "resumido" ? "Resumido" : "Detalhado"}</strong></li>
-              <li>• Formatos: <strong>{formats.join(", ").toUpperCase()}</strong></li>
-              <li>• Canais: <strong>{channels.join(", ")}</strong></li>
-            </ul>
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setStep(3)}>
-              Voltar
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button variant="outline" className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" />
+              <Download className="w-4 h-4" />
+              Baixar PDF
             </Button>
-            <Button variant="hero" onClick={handleGenerate} disabled={isGenerating}>
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  Gerar Relatório Agora
-                </>
-              )}
+            <Button variant="outline" className="flex items-center gap-2">
+              <Mic className="w-4 h-4 text-accent" />
+              <Download className="w-4 h-4" />
+              Baixar Áudio
             </Button>
           </div>
         </motion.div>
