@@ -58,12 +58,15 @@ serve(async (req: Request) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!MP_ACCESS_TOKEN) {
-      throw new Error("MP_ACCESS_TOKEN not configured");
-    }
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Supabase configuration missing");
+    if (!MP_ACCESS_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("Missing required configuration");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Serviço temporariamente indisponível. Tente novamente mais tarde.",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -111,8 +114,7 @@ serve(async (req: Request) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: payment.message || "Erro ao processar pagamento",
-            message: payment.message || "Erro ao processar pagamento. Tente novamente.",
+            message: "Erro ao processar pagamento. Verifique os dados e tente novamente.",
           }),
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
@@ -190,8 +192,7 @@ serve(async (req: Request) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: payment.message || "Erro ao gerar PIX",
-            message: payment.message || "Erro ao gerar QR Code. Tente novamente.",
+            message: "Erro ao gerar QR Code. Tente novamente.",
           }),
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
@@ -230,12 +231,10 @@ serve(async (req: Request) => {
     );
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Error processing payment:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: errorMessage,
         message: "Erro ao processar pagamento. Tente novamente.",
       }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }

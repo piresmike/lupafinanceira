@@ -11,6 +11,22 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const CACHE_TTL = 7200; // 2 horas em segundos
 
+// Simple in-memory rate limiter
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 30; // requests per window
+const RATE_WINDOW_MS = 60 * 1000; // 1 minute
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -18,12 +34,24 @@ serve(async (req) => {
   }
 
   try {
+    // Rate limit by IP or fallback
+    const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown';
+    if (!checkRateLimit(clientIP)) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'Muitas requisições. Tente novamente em alguns segundos.',
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const url = new URL(req.url);
     const category = url.searchParams.get('category') || 'general';
     const language = url.searchParams.get('language') || 'pt';
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const pageSize = parseInt(url.searchParams.get('pageSize') || '20');
-    const q = url.searchParams.get('q') || '';
+    const page = Math.max(1, Math.min(10, parseInt(url.searchParams.get('page') || '1') || 1));
+    const pageSize = Math.max(1, Math.min(50, parseInt(url.searchParams.get('pageSize') || '20') || 20));
+    const q = (url.searchParams.get('q') || '').slice(0, 200);
 
     console.log('📰 Fetching news:', { category, language, page, pageSize, q });
 

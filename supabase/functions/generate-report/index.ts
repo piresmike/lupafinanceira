@@ -1,8 +1,46 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function getAuthenticatedUser(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!;
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return { user, supabase };
+}
+
+async function requireActiveSubscription(userId: string) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const { data: sub, error } = await supabase
+    .from("subscriptions")
+    .select("status, expires_at")
+    .eq("user_id", userId)
+    .eq("status", "approved")
+    .gt("expires_at", new Date().toISOString())
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !sub) {
+    return false;
+  }
+  return true;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -10,20 +48,46 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authenticate user
+    const auth = await getAuthenticatedUser(req);
+    if (!auth) {
+      return new Response(
+        JSON.stringify({ error: "Autenticação necessária" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check active subscription
+    const hasSubscription = await requireActiveSubscription(auth.user.id);
+    if (!hasSubscription) {
+      return new Response(
+        JSON.stringify({ error: "Assinatura ativa necessária para gerar relatórios" }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { keywords, periodo, tipo } = await req.json();
 
-    if (!keywords || keywords.length === 0) {
+    if (!keywords || !Array.isArray(keywords) || keywords.length === 0 || keywords.length > 10) {
       return new Response(
-        JSON.stringify({ error: "Palavras-chave são obrigatórias" }),
+        JSON.stringify({ error: "Palavras-chave são obrigatórias (máximo 10)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // Validate inputs
+    const validPeriodos = ["semana", "mes", "trimestre", "ano"];
+    const validTipos = ["simples", "completo", "aprofundado"];
+    const safePeriodo = validPeriodos.includes(periodo) ? periodo : "mes";
+    const safeTipo = validTipos.includes(tipo) ? tipo : "completo";
+    const safeKeywords = keywords.map((k: unknown) => String(k).slice(0, 100).replace(/[<>]/g, ""));
+
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) {
+      console.error("LOVABLE_API_KEY not configured");
       return new Response(
-        JSON.stringify({ error: "API key não configurada" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Serviço temporariamente indisponível" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -40,9 +104,9 @@ Deno.serve(async (req) => {
       ano: "do último ano",
     };
 
-    const prompt = `Você é um analista financeiro especializado no mercado brasileiro. Escreva ${tipoDesc[tipo] || tipoDesc.completo} sobre o(s) tema(s): ${keywords.join(", ")}.
+    const prompt = `Você é um analista financeiro especializado no mercado brasileiro. Escreva ${tipoDesc[safeTipo]} sobre o(s) tema(s): ${safeKeywords.join(", ")}.
 
-Foque no período ${periodoDesc[periodo] || periodoDesc.mes}.
+Foque no período ${periodoDesc[safePeriodo]}.
 
 O relatório deve:
 - Ser escrito em português brasileiro formal
@@ -74,7 +138,7 @@ Formato: Use markdown com títulos (##), subtítulos (###), listas e negrito ond
       const errText = await response.text();
       console.error("AI Gateway error:", errText);
       return new Response(
-        JSON.stringify({ error: "Erro ao gerar relatório" }),
+        JSON.stringify({ error: "Erro ao gerar relatório. Tente novamente." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
