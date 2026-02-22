@@ -193,7 +193,7 @@ export default function Checkout() {
 
     if (data.success && data.status === "approved") {
       toast({ title: "Pagamento aprovado!", description: "Redirecionando..." });
-      setTimeout(() => navigate("/perfil-investidor"), 1500);
+      setTimeout(() => navigate("/criar-senha"), 1500);
     } else {
       setError(data.message || "Pagamento recusado. Tente novamente.");
     }
