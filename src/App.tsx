@@ -12,6 +12,7 @@ import PerfilInvestidor from "./pages/PerfilInvestidor";
 import Login from "./pages/Login";
 import RecuperarSenha from "./pages/RecuperarSenha";
 import RedefinirSenha from "./pages/RedefinirSenha";
+import CriarSenha from "./pages/CriarSenha";
 import Dashboard from "./pages/Dashboard";
 import DashboardHome from "./pages/dashboard/DashboardHome";
 import Noticias from "./pages/dashboard/Noticias";
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/recuperar-senha" element={<RecuperarSenha />} />
             <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+            <Route path="/criar-senha" element={<CriarSenha />} />
             <Route 
               path="/dashboard" 
               element={
