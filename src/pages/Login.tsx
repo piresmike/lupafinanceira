@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -32,13 +33,31 @@ export default function Login() {
     }
   }, [user, loading, navigate]);
 
+  const [showResendConfirmation, setShowResendConfirmation] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+
   const getErrorMessage = (error: any) => {
+    if (error.message === 'Email not confirmed') {
+      setShowResendConfirmation(true);
+      return 'Por favor, confirme seu email antes de fazer login.';
+    }
     const errorMessages: Record<string, string> = {
       'Invalid login credentials': 'Email ou senha incorretos',
-      'Email not confirmed': 'Por favor, confirme seu email antes de fazer login',
       'User already registered': 'Este email já está cadastrado',
     };
     return errorMessages[error.message] || 'Ocorreu um erro. Tente novamente.';
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) return;
+    setIsResending(true);
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    if (error) {
+      toast({ title: 'Erro', description: 'Não foi possível reenviar o email.', variant: 'destructive' });
+    } else {
+      toast({ title: 'Email reenviado!', description: 'Verifique sua caixa de entrada.' });
+    }
+    setIsResending(false);
   };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -272,6 +291,28 @@ export default function Login() {
             </Button>
           </form>
 
+          {/* Resend confirmation warning */}
+          {showResendConfirmation && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 p-4 rounded-xl bg-warning/10 border border-warning/30 text-center"
+            >
+              <p className="text-sm text-foreground mb-3">
+                Seu email ainda não foi confirmado. Verifique sua caixa de entrada ou reenvie o link.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResendConfirmation}
+                disabled={isResending}
+              >
+                {isResending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Reenviar email de confirmação
+              </Button>
+            </motion.div>
+          )}
+
           {/* Links */}
           <div className="mt-6 text-center space-y-3">
             <Link
@@ -282,8 +323,8 @@ export default function Login() {
             </Link>
             <p className="text-sm text-muted-foreground">
               Não tem conta?{' '}
-              <Link to="/assinatura" className="text-primary hover:underline font-medium">
-                Assine agora
+              <Link to="/cadastro" className="text-primary hover:underline font-medium">
+                Crie sua conta
               </Link>
             </p>
           </div>

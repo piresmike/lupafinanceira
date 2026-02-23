@@ -10,6 +10,8 @@ import Assinatura from "./pages/Assinatura";
 import Checkout from "./pages/Checkout";
 import PerfilInvestidor from "./pages/PerfilInvestidor";
 import Login from "./pages/Login";
+import Cadastro from "./pages/Cadastro";
+import ConfirmarEmail from "./pages/ConfirmarEmail";
 import RecuperarSenha from "./pages/RecuperarSenha";
 import RedefinirSenha from "./pages/RedefinirSenha";
 import CriarSenha from "./pages/CriarSenha";
@@ -39,6 +41,8 @@ const App = () => (
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/perfil-investidor" element={<PerfilInvestidor />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/cadastro" element={<Cadastro />} />
+            <Route path="/confirmar-email" element={<ConfirmarEmail />} />
             <Route path="/recuperar-senha" element={<RecuperarSenha />} />
             <Route path="/redefinir-senha" element={<RedefinirSenha />} />
             <Route path="/criar-senha" element={<CriarSenha />} />
