@@ -74,7 +74,7 @@ export function Navbar() {
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : isAuthenticated ? (
-                "Dashboard"
+                "Entrar"
               ) : (
                 "Entrar"
               )}
@@ -123,7 +123,7 @@ export function Navbar() {
                       setIsOpen(false);
                     }}
                   >
-                    {isAuthenticated ? "Dashboard" : "Entrar"}
+                    {isAuthenticated ? "Entrar" : "Entrar"}
                   </Button>
                   <Button variant="hero" asChild className="w-full">
                     <Link to="/assinatura" onClick={() => setIsOpen(false)}>
